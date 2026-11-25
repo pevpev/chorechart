@@ -71,13 +71,22 @@
     { id: "dragon", emoji: "🐲", name: "Legend", hint: "Reach the dragon stage" }
   ];
 
+  var OUTFITS = [
+    { id: "none", name: "No outfit", emoji: "", cost: 0 },
+    { id: "scarf", name: "Cozy Scarf", emoji: "🧣", cost: 20 },
+    { id: "cap", name: "Tiny Cap", emoji: "🎩", cost: 40 },
+    { id: "shades", name: "Cool Shades", emoji: "🕶️", cost: 60 },
+    { id: "cape", name: "Wizard Cape", emoji: "🧙", cost: 100 },
+    { id: "crown", name: "Golden Crown", emoji: "👑", cost: 200 }
+  ];
+
   var STAGES = [
-    { min: 0, name: "Egg", emoji: "🥚", hint: "Finish every chore on one day to hatch." },
-    { min: 1, name: "Hatchling", emoji: "🐣", hint: "Nice! 3 perfect days in a row to evolve." },
-    { min: 3, name: "Chick", emoji: "🐤", hint: "Growing fast. 7 perfect days in a row to evolve." },
-    { min: 7, name: "Fox Friend", emoji: "🦊", hint: "Halfway there. 14 perfect days in a row to evolve." },
-    { min: 14, name: "Owl Guardian", emoji: "🦉", hint: "Almost legendary. 30 perfect days to evolve." },
-    { min: 30, name: "Dragon", emoji: "🐲", hint: "Fully evolved. Your creature is legendary!" }
+    { min: 0, name: "Egg", emoji: "🥚", outfit: "none", hint: "Finish every chore on one day to hatch." },
+    { min: 1, name: "Hatchling", emoji: "🐣", outfit: "scarf", hint: "Nice! 3 perfect days in a row to evolve." },
+    { min: 3, name: "Chick", emoji: "🐤", outfit: "cap", hint: "Growing fast. 7 perfect days in a row to evolve." },
+    { min: 7, name: "Fox Friend", emoji: "🦊", outfit: "shades", hint: "Halfway there. 14 perfect days in a row to evolve." },
+    { min: 14, name: "Owl Guardian", emoji: "🦉", outfit: "cape", hint: "Almost legendary. 30 perfect days to evolve." },
+    { min: 30, name: "Dragon", emoji: "🐲", outfit: "crown", hint: "Fully evolved. Your creature is legendary!" }
   ];
 
   // ---------- Small helpers ----------
@@ -258,6 +267,7 @@
     var next = STAGES[stageIndex + 1];
     return {
       stage: stage,
+      stageIndex: stageIndex,
       level: level,
       xp: xp,
       xpInto: xpInto,
@@ -268,6 +278,21 @@
       toNext: next ? next.min - power : 0,
       next: next
     };
+  }
+
+  function syncOutfits(kid) {
+    if (!kid.wardrobe) kid.wardrobe = {};
+    var c = creatureFor(kid);
+    var earned = STAGES[c.stageIndex].outfit;
+    if (earned && earned !== "none") kid.wardrobe[earned] = true;
+  }
+
+  function currentOutfit(kid) {
+    var chosen = kid.outfit && kid.outfit !== "auto" ? kid.outfit : STAGES[creatureFor(kid).stageIndex].outfit;
+    for (var i = 0; i < OUTFITS.length; i++) {
+      if (OUTFITS[i].id === chosen && (chosen === "none" || (kid.wardrobe && kid.wardrobe[chosen]))) return OUTFITS[i];
+    }
+    return OUTFITS[0];
   }
 
   function defaultChores() {
@@ -297,7 +322,7 @@
       reward: { name: "", points: 10 },
       activeKid: 0,
       printAll: false,
-      kids: [{ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, perfectDays: {}, spentPoints: 0, claimed: {}, creatureName: "Chore Pal", chores: defaultChores() }]
+      kids: [{ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, perfectDays: {}, spentPoints: 0, claimed: {}, wardrobe: {}, outfit: "auto", creatureName: "Chore Pal", chores: defaultChores() }]
     };
   }
 
@@ -379,6 +404,8 @@
         perfectDays: perfectDays,
         spentPoints: Math.max(0, Number(k && k.spentPoints) || 0),
         claimed: k && k.claimed && typeof k.claimed === "object" ? k.claimed : {},
+        wardrobe: k && k.wardrobe && typeof k.wardrobe === "object" ? k.wardrobe : {},
+        outfit: k && typeof k.outfit === "string" ? k.outfit : "auto",
         creatureName: k && typeof k.creatureName === "string" ? k.creatureName.slice(0, 24) : "Chore Pal",
         chores: chores
       });
@@ -405,7 +432,7 @@
   }
 
   function activeKid() {
-    if (!state.kids.length) state.kids.push({ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, perfectDays: {}, spentPoints: 0, claimed: {}, creatureName: "Chore Pal", chores: [] });
+    if (!state.kids.length) state.kids.push({ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, perfectDays: {}, spentPoints: 0, claimed: {}, wardrobe: {}, outfit: "auto", creatureName: "Chore Pal", chores: [] });
     if (state.activeKid >= state.kids.length) state.activeKid = state.kids.length - 1;
     return state.kids[state.activeKid];
   }
@@ -535,7 +562,7 @@
       });
       var add = button("+ Add child", "btn-small", function () {
         if (state.kids.length >= 6) { window.alert("Pro supports up to 6 children per chart set."); return; }
-        state.kids.push({ id: uid(), name: "Child " + (state.kids.length + 1), stars: 0, rate: null, completed: {}, perfectDays: {}, spentPoints: 0, claimed: {}, creatureName: "Chore Pal", chores: [] });
+        state.kids.push({ id: uid(), name: "Child " + (state.kids.length + 1), stars: 0, rate: null, completed: {}, perfectDays: {}, spentPoints: 0, claimed: {}, wardrobe: {}, outfit: "auto", creatureName: "Chore Pal", chores: [] });
         state.activeKid = state.kids.length - 1;
         save();
         renderAll();
@@ -1077,6 +1104,48 @@
       grid.append(item);
     });
     root.append(grid);
+
+    syncOutfits(kid);
+    var closetHead = el("div", "shop-head");
+    closetHead.append(el("span", "shop-title", "👕 Creature closet"));
+    closetHead.append(button(kid.outfit === "auto" ? "✅ Auto" : "Auto", "btn-small", function () {
+      kid.outfit = "auto";
+      save();
+      renderAll();
+    }));
+    root.append(closetHead);
+
+    var outfits = el("div", "shop-grid");
+    OUTFITS.slice(1).forEach(function (o) {
+      var item = el("div", "shop-item");
+      item.append(el("div", "shop-name", o.emoji + " " + o.name));
+      var owned = !!(kid.wardrobe && kid.wardrobe[o.id]);
+      item.append(el("div", "shop-cost", owned ? "Owned" : o.cost + " pts"));
+      var action;
+      if (owned) {
+        action = button(kid.outfit === o.id ? "✅ Wearing" : "Wear", "btn-small", function () {
+          kid.outfit = o.id;
+          save();
+          renderAll();
+        });
+      } else {
+        action = button("Buy", "btn-small", function () {
+          if (pointsBalance(kid) < o.cost) {
+            window.alert("You need " + (o.cost - pointsBalance(kid)) + " more points for " + o.name + ".");
+            return;
+          }
+          kid.spentPoints = (kid.spentPoints || 0) + o.cost;
+          if (!kid.wardrobe) kid.wardrobe = {};
+          kid.wardrobe[o.id] = true;
+          kid.outfit = o.id;
+          save();
+          renderAll();
+        });
+      }
+      item.append(action);
+      outfits.append(item);
+    });
+    root.append(outfits);
   }
 
   function renderBadges() {
@@ -1226,7 +1295,11 @@
     var card = el("div", "creature-card");
     card.dataset.stage = c.stage.name.toLowerCase().replace(/\s+/g, "-");
 
-    card.append(el("div", "creature-art", c.stage.emoji));
+    var outfit = currentOutfit(kid);
+    var art = el("div", "creature-art");
+    art.append(el("span", "creature-body", c.stage.emoji));
+    if (outfit.emoji) art.append(el("span", "creature-outfit", outfit.emoji));
+    card.append(art);
     var info = el("div", "creature-info");
 
     var title = el("div", "creature-title", (kid.creatureName || "Chore Pal") + " · " + c.stage.name);
@@ -1242,6 +1315,7 @@
 
     var meta = "🔥 " + c.streak + " day streak · 💎 " + c.earned + " points · " + c.xp + " XP";
     if (c.boost) meta += " · +" + c.boost + " evolution days from points";
+    if (outfit.emoji) meta += " · 👕 " + outfit.name;
     if (c.next) meta += " · evolves in " + c.toNext + " perfect day" + (c.toNext === 1 ? "" : "s");
     info.append(el("div", "creature-meta", meta));
 
@@ -1262,6 +1336,7 @@
 
   function renderAll() {
     updatePrintStyle();
+    state.kids.forEach(syncOutfits);
     renderControls();
     renderPreview();
     renderCoupons();
