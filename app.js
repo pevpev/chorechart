@@ -49,6 +49,22 @@
     return /s$/i.test(n) ? n + "'" : n + "'s";
   }
 
+  function money(n) {
+    return "$" + (Math.round(Number(n) * 100) / 100).toFixed(2);
+  }
+
+  function rateFor(kid) {
+    var rate = IS_PRO && kid && typeof kid.rate === "number" ? kid.rate : state.allowanceRate;
+    return Math.max(0, Number(rate) || 0);
+  }
+
+  function possiblePoints(kid) {
+    return kid.chores.reduce(function (sum, c) {
+      var scheduled = c.days.filter(Boolean).length;
+      return sum + c.points * scheduled;
+    }, 0);
+  }
+
   function defaultChores() {
     return [
       { id: uid(), name: "Make the bed", points: 2, days: [true, true, true, true, true, false, false] },
@@ -62,10 +78,12 @@
     return {
       weekStart: mondayISO(),
       theme: "sunshine",
+      usePoints: true,
+      allowanceRate: 0.25,
       reward: { name: "", points: 10 },
       activeKid: 0,
       printAll: false,
-      kids: [{ id: uid(), name: "My Champs", stars: 0, chores: defaultChores() }]
+      kids: [{ id: uid(), name: "My Champs", stars: 0, rate: null, chores: defaultChores() }]
     };
   }
 
@@ -76,6 +94,8 @@
     var out = {
       weekStart: typeof raw.weekStart === "string" ? raw.weekStart : base.weekStart,
       theme: ["sunshine", "ocean", "forest", "candy"].indexOf(raw.theme) >= 0 ? raw.theme : "sunshine",
+      usePoints: raw.usePoints !== false,
+      allowanceRate: Math.max(0, Number(raw.allowanceRate) || 0),
       reward: {
         name: raw.reward && typeof raw.reward.name === "string" ? raw.reward.name : "",
         points: Number(raw.reward && raw.reward.points) || 10
@@ -101,10 +121,14 @@
         };
       });
       if (!IS_PRO) chores = chores.slice(0, FREE_CHORE_LIMIT);
+      var rate = k && k.rate !== null && k.rate !== undefined && k.rate !== ""
+        ? Math.max(0, Number(k.rate) || 0)
+        : null;
       out.kids.push({
         id: uid(),
         name: k && typeof k.name === "string" ? k.name : "My Champs",
         stars: Math.max(0, Number(k && k.stars) || 0),
+        rate: rate,
         chores: chores
       });
     });
@@ -130,7 +154,7 @@
   }
 
   function activeKid() {
-    if (!state.kids.length) state.kids.push({ id: uid(), name: "My Champs", stars: 0, chores: [] });
+    if (!state.kids.length) state.kids.push({ id: uid(), name: "My Champs", stars: 0, rate: null, chores: [] });
     if (state.activeKid >= state.kids.length) state.activeKid = state.kids.length - 1;
     return state.kids[state.activeKid];
   }
@@ -220,7 +244,7 @@
       });
       var add = button("+ Add child", "btn-small", function () {
         if (state.kids.length >= 6) { window.alert("Pro supports up to 6 children per chart set."); return; }
-        state.kids.push({ id: uid(), name: "Child " + (state.kids.length + 1), stars: 0, chores: [] });
+        state.kids.push({ id: uid(), name: "Child " + (state.kids.length + 1), stars: 0, rate: null, chores: [] });
         state.activeKid = state.kids.length - 1;
         save();
         renderAll();
@@ -284,7 +308,7 @@
     ptsInput.value = "2";
     ptsInput.setAttribute("aria-label", "Points");
     ptsWrap.append(ptsInput);
-    row.append(ptsWrap);
+    if (state.usePoints) row.append(ptsWrap);
     form.append(row);
 
     var dayWrap = el("div", "day-grid");
@@ -329,7 +353,7 @@
     kid.chores.forEach(function (c) {
       var item = el("li", "chore-item");
       item.append(el("span", "chore-name", c.name));
-      item.append(el("span", "chore-pts", c.points + " pts"));
+      if (state.usePoints) item.append(el("span", "chore-pts", c.points + " pts"));
 
       var mini = el("div", "day-mini");
       c.days.forEach(function (on, i) {
@@ -377,6 +401,28 @@
 
   function rewardControls() {
     var wrap = el("div");
+
+    var toggleWrap = el("div", "field");
+    var toggleLabel = el("label");
+    var toggle = el("input");
+    toggle.type = "checkbox";
+    toggle.checked = state.usePoints;
+    toggle.style.width = "auto";
+    toggle.style.marginRight = "8px";
+    toggle.addEventListener("change", function () {
+      state.usePoints = toggle.checked;
+      save();
+      renderAll();
+    });
+    toggleLabel.append(toggle, document.createTextNode("Use a points system"));
+    toggleWrap.append(toggleLabel);
+    wrap.append(toggleWrap);
+
+    if (!state.usePoints) {
+      wrap.append(el("div", "counter", "Points, allowance and rewards are hidden — families just tick off chores."));
+      return wrap;
+    }
+
     wrap.append(textField("Reward name (optional)", state.reward.name, function (v) {
       state.reward.name = v;
       save();
@@ -387,7 +433,25 @@
       save();
       renderPreview();
     }, "number"));
+
+    var rateField = textField("Allowance per point ($)", String(state.allowanceRate), function (v) {
+      state.allowanceRate = Math.max(0, Number(v) || 0);
+      save();
+      renderPreview();
+    }, "number");
+    rateField.querySelector("input").step = "0.01";
+    wrap.append(rateField);
+
     if (IS_PRO) {
+      var kidRate = textField("This child's rate ($ — blank = default)",
+        activeKid().rate === null ? "" : String(activeKid().rate), function (v) {
+          activeKid().rate = v.trim() === "" ? null : Math.max(0, Number(v) || 0);
+          save();
+          renderPreview();
+        }, "number");
+      kidRate.querySelector("input").step = "0.01";
+      wrap.append(kidRate);
+
       wrap.append(textField("Stars earned so far", String(activeKid().stars), function (v) {
         activeKid().stars = Math.max(0, Number(v) || 0);
         save();
@@ -485,7 +549,7 @@
     var thead = el("thead");
     var headRow = el("tr");
     headRow.append(el("th", "col-chore", "Chore"));
-    headRow.append(el("th", "col-points", "Points"));
+    if (state.usePoints) headRow.append(el("th", "col-points", "Points"));
     DAYS.forEach(function (d) { headRow.append(el("th", "col-day", d)); });
     thead.append(headRow);
     table.append(thead);
@@ -494,7 +558,7 @@
     kid.chores.forEach(function (c) {
       var row = el("tr");
       row.append(el("td", "chore-cell", c.name));
-      row.append(el("td", "pts-cell", String(c.points)));
+      if (state.usePoints) row.append(el("td", "pts-cell", String(c.points)));
       for (var i = 0; i < 7; i++) {
         var cell = el("td");
         if (c.days[i]) cell.append(el("span", "tick"));
@@ -505,7 +569,20 @@
     table.append(tbody);
     chart.append(table);
 
-    if (state.reward.name) {
+    if (state.usePoints && rateFor(kid) > 0) {
+      var rate = rateFor(kid);
+      var possible = possiblePoints(kid);
+      var allowance = el("div", "chart-allowance");
+      allowance.append(el("span", null, "💵 If all done: " + possible + " pts = " + money(possible * rate)));
+      if (IS_PRO) {
+        allowance.append(el("span", "allowance-detail",
+          money(rate) + "/pt · 4-week estimate " + money(possible * rate * 4)));
+      }
+      allowance.append(el("span", "allowance-earned", "Earned: ______ pts = $ ______"));
+      chart.append(allowance);
+    }
+
+    if (state.usePoints && state.reward.name) {
       var reward = el("div", "chart-reward");
       reward.append(el("span", null, "⭐ Working toward: " + state.reward.name + " (" + state.reward.points + " pts)"));
 

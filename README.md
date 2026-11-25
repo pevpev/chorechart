@@ -2,6 +2,8 @@
 
 A free printable chore-chart generator (the traffic magnet) plus a paid **Pro** download (the income). Everything is plain HTML/CSS/JS — no build tools, no server, no monthly costs.
 
+Current features: weekly printable charts, points or a simple no-points mode, an allowance calculator ($ per point), reward/star tracking, multiple children (Pro), colour themes (Pro), and offline use.
+
 ## What's here
 
 | File | What it is |
