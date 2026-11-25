@@ -11,6 +11,44 @@
   var DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   var STORAGE_KEY = IS_PRO ? "chorechart.pro.v1" : "chorechart.free.v1";
 
+  var ICONS = ["🛏️", "🪥", "🧸", "🧹", "🍽️", "🐶", "📚", "🗑️", "👕", "🪴", "🛁", "⭐", "🚿", "🥣", "🐱", "✏️"];
+
+  var PRESETS = {
+    Toddlers: [
+      { name: "Make the bed", points: 2, icon: "🛏️" },
+      { name: "Brush teeth", points: 1, icon: "🪥" },
+      { name: "Put toys away", points: 2, icon: "🧸" },
+      { name: "Wash hands", points: 1, icon: "🧼" },
+      { name: "Feed the pet", points: 1, icon: "🐶" },
+      { name: "Pick up clothes", points: 2, icon: "👕" }
+    ],
+    Kids: [
+      { name: "Make the bed", points: 2, icon: "🛏️" },
+      { name: "Brush teeth", points: 1, icon: "🪥" },
+      { name: "Clean my room", points: 3, icon: "🧹" },
+      { name: "Take out trash", points: 2, icon: "🗑️" },
+      { name: "Feed the pet", points: 1, icon: "🐶" },
+      { name: "Set the table", points: 2, icon: "🍽️" },
+      { name: "Homework", points: 3, icon: "📚" },
+      { name: "Water plants", points: 1, icon: "🪴" }
+    ],
+    Teens: [
+      { name: "Do laundry", points: 3, icon: "👕" },
+      { name: "Wash dishes", points: 3, icon: "🍽️" },
+      { name: "Take out trash", points: 2, icon: "🗑️" },
+      { name: "Clean bathroom", points: 4, icon: "🛁" },
+      { name: "Mow the lawn", points: 5, icon: "🌱" },
+      { name: "Help with groceries", points: 3, icon: "🛒" },
+      { name: "Walk the dog", points: 2, icon: "🐕" },
+      { name: "Study", points: 3, icon: "✏️" }
+    ]
+  };
+
+  var DEFAULT_COUPONS = [
+    "Movie night", "Pick dinner", "Stay up 30 min late", "Extra story",
+    "Choose a game", "No chores tomorrow", "Sleepover", "Ice cream"
+  ];
+
   // ---------- Small helpers ----------
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -67,10 +105,10 @@
 
   function defaultChores() {
     return [
-      { id: uid(), name: "Make the bed", points: 2, days: [true, true, true, true, true, false, false] },
-      { id: uid(), name: "Brush teeth", points: 1, days: [true, true, true, true, true, true, true] },
-      { id: uid(), name: "Tidy up toys", points: 3, days: [true, false, true, false, true, false, false] },
-      { id: uid(), name: "Take out trash", points: 2, days: [false, false, true, false, false, false, false] }
+      { id: uid(), name: "Make the bed", points: 2, icon: "🛏️", days: [true, true, true, true, true, false, false] },
+      { id: uid(), name: "Brush teeth", points: 1, icon: "🪥", days: [true, true, true, true, true, true, true] },
+      { id: uid(), name: "Tidy up toys", points: 3, icon: "🧸", days: [true, false, true, false, true, false, false] },
+      { id: uid(), name: "Take out trash", points: 2, icon: "🗑️", days: [false, false, true, false, false, false, false] }
     ];
   }
 
@@ -80,6 +118,8 @@
       theme: "sunshine",
       usePoints: true,
       allowanceRate: 0.25,
+      presetGroup: "Kids",
+      coupons: DEFAULT_COUPONS.map(function (text) { return { id: uid(), text: text, on: true }; }),
       reward: { name: "", points: 10 },
       activeKid: 0,
       printAll: false,
@@ -96,6 +136,12 @@
       theme: ["sunshine", "ocean", "forest", "candy"].indexOf(raw.theme) >= 0 ? raw.theme : "sunshine",
       usePoints: raw.usePoints !== false,
       allowanceRate: raw.allowanceRate === undefined ? 0.25 : Math.max(0, Number(raw.allowanceRate) || 0),
+      presetGroup: PRESETS[raw.presetGroup] ? raw.presetGroup : "Kids",
+      coupons: Array.isArray(raw.coupons)
+        ? raw.coupons.slice(0, 12).map(function (c) {
+            return { id: uid(), text: typeof c.text === "string" ? c.text : "Reward", on: c.on !== false };
+          })
+        : base.coupons,
       reward: {
         name: raw.reward && typeof raw.reward.name === "string" ? raw.reward.name : "",
         points: Number(raw.reward && raw.reward.points) || 10
@@ -117,6 +163,7 @@
           id: uid(),
           name: typeof c.name === "string" ? c.name : "Chore",
           points: Math.max(1, Math.min(99, Number(c.points) || 1)),
+          icon: typeof c.icon === "string" ? c.icon.slice(0, 8) : "",
           days: days.map(Boolean)
         };
       });
@@ -213,6 +260,15 @@
 
     var actions = el("div", "card");
     actions.append(button("🖨️ Print chart", "btn-primary btn-block", function () { window.print(); }));
+    if (IS_PRO) {
+      var couponBtn = button("🎟️ Print reward coupons", "btn-block", function () {
+        document.body.classList.add("coupons-only");
+        window.print();
+        setTimeout(function () { document.body.classList.remove("coupons-only"); }, 1200);
+      });
+      couponBtn.style.marginTop = "8px";
+      actions.append(couponBtn);
+    }
     var reset = button("Reset to example chart", "btn-danger btn-block", function () {
       if (window.confirm("Replace everything with the example chart?")) {
         state = defaultState();
@@ -323,6 +379,23 @@
     });
     form.append(dayWrap);
 
+    var chosenIcon = "";
+    if (IS_PRO) {
+      var iconWrap = el("div", "icon-grid");
+      ICONS.forEach(function (ico) {
+        var pick = el("button", "icon-pick", ico);
+        pick.type = "button";
+        pick.title = "Use " + ico;
+        pick.addEventListener("click", function () {
+          chosenIcon = chosenIcon === ico ? "" : ico;
+          Array.prototype.forEach.call(iconWrap.children, function (x) { x.classList.remove("active"); });
+          if (chosenIcon) pick.classList.add("active");
+        });
+        iconWrap.append(pick);
+      });
+      form.append(iconWrap);
+    }
+
     var addBtn = button("+ Add chore", "btn-primary btn-block", function () {});
     addBtn.type = "submit";
     addBtn.style.marginTop = "10px";
@@ -340,6 +413,7 @@
         id: uid(),
         name: name,
         points: Math.max(1, Math.min(99, Number(ptsInput.value) || 1)),
+        icon: chosenIcon,
         days: boxes.map(function (b) { return b.checked; })
       });
       save();
@@ -352,6 +426,7 @@
     var list = el("ul", "chore-list");
     kid.chores.forEach(function (c) {
       var item = el("li", "chore-item");
+      if (IS_PRO && c.icon) item.append(el("span", "chore-icon", c.icon));
       item.append(el("span", "chore-name", c.name));
       if (state.usePoints) item.append(el("span", "chore-pts", c.points + " pts"));
 
@@ -381,6 +456,36 @@
       list.append(item);
     });
     wrap.append(list);
+
+    var ideas = el("div", "preset-box");
+    ideas.append(el("div", "preset-title", "💡 Need chore ideas? Tap to add."));
+    var presetTabs = el("div", "kid-tabs");
+    Object.keys(PRESETS).forEach(function (group) {
+      presetTabs.append(button(group,
+        "kid-tab" + (state.presetGroup === group ? " active" : ""), function () {
+          state.presetGroup = group;
+          save();
+          renderControls();
+        }));
+    });
+    ideas.append(presetTabs);
+    var chips = el("div", "preset-chips");
+    PRESETS[state.presetGroup].forEach(function (p) {
+      chips.append(button("+ " + p.icon + " " + p.name + " (" + p.points + ")", "preset-chip", function () {
+        if (!IS_PRO && kid.chores.length >= FREE_CHORE_LIMIT) {
+          window.alert("Free charts allow " + FREE_CHORE_LIMIT + " chores. Upgrade to Pro for unlimited chores.");
+          return;
+        }
+        kid.chores.push({
+          id: uid(), name: p.name, points: p.points, icon: p.icon,
+          days: [true, true, true, true, true, false, false]
+        });
+        save();
+        renderAll();
+      }));
+    });
+    ideas.append(chips);
+    wrap.append(ideas);
 
     if (!IS_PRO) {
       var counter = el("div", "counter", kid.chores.length + " / " + FREE_CHORE_LIMIT + " chores used");
@@ -498,6 +603,40 @@
     printAllWrap.append(checkLabel);
     wrap.append(printAllWrap);
 
+    var couponWrap = el("div", "field");
+    couponWrap.append(el("label", null, "Reward coupons to print"));
+    var couponList = el("div", "coupon-list");
+    state.coupons.forEach(function (c) {
+      var line = el("label");
+      var cb = el("input");
+      cb.type = "checkbox";
+      cb.checked = c.on;
+      cb.style.width = "auto";
+      cb.style.marginRight = "8px";
+      cb.addEventListener("change", function () {
+        c.on = cb.checked;
+        save();
+        renderCoupons();
+      });
+      line.append(cb, document.createTextNode(c.text));
+      couponList.append(line);
+    });
+    couponWrap.append(couponList);
+    var couponRow = el("div", "row");
+    var couponInput = el("input");
+    couponInput.type = "text";
+    couponInput.placeholder = "Add a reward...";
+    couponRow.append(couponInput);
+    couponRow.append(button("Add", "btn-small", function () {
+      var text = couponInput.value.trim();
+      if (!text || state.coupons.length >= 12) return;
+      state.coupons.push({ id: uid(), text: text, on: true });
+      save();
+      renderAll();
+    }));
+    couponWrap.append(couponRow);
+    wrap.append(couponWrap);
+
     var dataRow = el("div", "row");
     dataRow.append(button("⬇ Export data", "btn-small", function () {
       var blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
@@ -535,6 +674,38 @@
     return wrap;
   }
 
+  // ---------- Printable reward coupon sheet (Pro) ----------
+  function renderCoupons() {
+    var root = document.getElementById("couponSheet");
+    if (!root || !IS_PRO) return;
+    root.replaceChildren();
+
+    var head = el("div", "coupon-head");
+    head.append(el("h2", null, "Reward Coupons"));
+    head.append(el("div", "coupon-sub", "Cut out and hand out when earned."));
+    root.append(head);
+
+    var grid = el("div", "coupon-grid");
+    state.coupons.filter(function (c) { return c.on; }).forEach(function (c) {
+      var ticket = el("div", "coupon");
+      ticket.append(el("div", "coupon-text", c.text));
+      ticket.append(el("div", "coupon-foot", "✂  redeemed: ____________"));
+      grid.append(ticket);
+    });
+    if (!grid.children.length) {
+      grid.append(el("div", "counter", "No coupons selected — choose some in Options & data."));
+    }
+    root.append(grid);
+
+    var stars = el("div", "sticker-sheet");
+    stars.append(el("h2", null, "⭐ Star Chart"));
+    var starGrid = el("div", "star-grid");
+    for (var i = 0; i < 30; i++) starGrid.append(el("span", "star", "☆"));
+    stars.append(starGrid);
+    stars.append(el("div", "coupon-foot", "Goal: ____________________   Reward: ____________________"));
+    root.append(stars);
+  }
+
   // ---------- Preview ----------
   function buildChart(kid) {
     var chart = el("div", "chart");
@@ -557,7 +728,7 @@
     var tbody = el("tbody");
     kid.chores.forEach(function (c) {
       var row = el("tr");
-      row.append(el("td", "chore-cell", c.name));
+      row.append(el("td", "chore-cell", (IS_PRO && c.icon ? c.icon + " " : "") + c.name));
       if (state.usePoints) row.append(el("td", "pts-cell", String(c.points)));
       for (var i = 0; i < 7; i++) {
         var cell = el("td");
@@ -612,6 +783,7 @@
   function renderAll() {
     renderControls();
     renderPreview();
+    renderCoupons();
   }
 
   // ---------- Wire up ----------
