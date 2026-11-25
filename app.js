@@ -49,6 +49,15 @@
     "Choose a game", "No chores tomorrow", "Sleepover", "Ice cream"
   ];
 
+  var STAGES = [
+    { min: 0, name: "Egg", emoji: "🥚", hint: "Finish every chore on one day to hatch." },
+    { min: 1, name: "Hatchling", emoji: "🐣", hint: "Nice! 3 perfect days in a row to evolve." },
+    { min: 3, name: "Chick", emoji: "🐤", hint: "Growing fast. 7 perfect days in a row to evolve." },
+    { min: 7, name: "Fox Friend", emoji: "🦊", hint: "Halfway there. 14 perfect days in a row to evolve." },
+    { min: 14, name: "Owl Guardian", emoji: "🦉", hint: "Almost legendary. 30 perfect days to evolve." },
+    { min: 30, name: "Dragon", emoji: "🐲", hint: "Fully evolved. Your creature is legendary!" }
+  ];
+
   // ---------- Small helpers ----------
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -130,6 +139,56 @@
     return { total: total, done: done };
   }
 
+  function recomputePerfectDays(kid) {
+    if (!kid.perfectDays) kid.perfectDays = {};
+    for (var i = 0; i < 7; i++) {
+      var date = dateForDay(i);
+      var required = 0;
+      var done = 0;
+      kid.chores.forEach(function (c) {
+        if (!c.days[i]) return;
+        required++;
+        if (kid.completed && kid.completed[c.id + "|" + date]) done++;
+      });
+      if (required > 0 && done === required) kid.perfectDays[date] = true;
+      else delete kid.perfectDays[date];
+    }
+  }
+
+  function streakFor(kid) {
+    if (!kid.perfectDays) return 0;
+    var now = new Date();
+    var cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (!kid.perfectDays[toISO(cursor)]) cursor.setDate(cursor.getDate() - 1);
+    var count = 0;
+    while (kid.perfectDays[toISO(cursor)]) {
+      count++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return count;
+  }
+
+  function creatureFor(kid) {
+    var streak = streakFor(kid);
+    var completedCount = Object.keys(kid.completed || {}).length;
+    var xp = completedCount * 10;
+    var level = Math.floor(xp / 50) + 1;
+    var xpInto = xp % 50;
+    var stageIndex = 0;
+    STAGES.forEach(function (s, i) { if (streak >= s.min) stageIndex = i; });
+    var stage = STAGES[stageIndex];
+    var next = STAGES[stageIndex + 1];
+    return {
+      stage: stage,
+      level: level,
+      xp: xp,
+      xpInto: xpInto,
+      streak: streak,
+      toNext: next ? next.min - streak : 0,
+      next: next
+    };
+  }
+
   function defaultChores() {
     return [
       { id: uid(), name: "Make the bed", points: 2, icon: "🛏️", days: [true, true, true, true, true, false, false] },
@@ -150,7 +209,7 @@
       reward: { name: "", points: 10 },
       activeKid: 0,
       printAll: false,
-      kids: [{ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, chores: defaultChores() }]
+      kids: [{ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, perfectDays: {}, creatureName: "Chore Pal", chores: defaultChores() }]
     };
   }
 
@@ -204,12 +263,20 @@
           if (k.completed[key]) completed[key] = true;
         });
       }
+      var perfectDays = {};
+      if (k && k.perfectDays && typeof k.perfectDays === "object") {
+        Object.keys(k.perfectDays).forEach(function (key) {
+          if (k.perfectDays[key]) perfectDays[key] = true;
+        });
+      }
       out.kids.push({
         id: uid(),
         name: k && typeof k.name === "string" ? k.name : "My Champs",
         stars: Math.max(0, Number(k && k.stars) || 0),
         rate: rate,
         completed: completed,
+        perfectDays: perfectDays,
+        creatureName: k && typeof k.creatureName === "string" ? k.creatureName.slice(0, 24) : "Chore Pal",
         chores: chores
       });
     });
@@ -235,7 +302,7 @@
   }
 
   function activeKid() {
-    if (!state.kids.length) state.kids.push({ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, chores: [] });
+    if (!state.kids.length) state.kids.push({ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, perfectDays: {}, creatureName: "Chore Pal", chores: [] });
     if (state.activeKid >= state.kids.length) state.activeKid = state.kids.length - 1;
     return state.kids[state.activeKid];
   }
@@ -342,7 +409,7 @@
       });
       var add = button("+ Add child", "btn-small", function () {
         if (state.kids.length >= 6) { window.alert("Pro supports up to 6 children per chart set."); return; }
-        state.kids.push({ id: uid(), name: "Child " + (state.kids.length + 1), stars: 0, rate: null, completed: {}, chores: [] });
+        state.kids.push({ id: uid(), name: "Child " + (state.kids.length + 1), stars: 0, rate: null, completed: {}, perfectDays: {}, creatureName: "Chore Pal", chores: [] });
         state.activeKid = state.kids.length - 1;
         save();
         renderAll();
@@ -356,6 +423,12 @@
       save();
       renderPreview();
       if (IS_PRO) renderControls();
+    }));
+
+    wrap.append(textField("Creature's name", kid.creatureName || "Chore Pal", function (v) {
+      kid.creatureName = v;
+      save();
+      renderPreview();
     }));
 
     if (IS_PRO && state.kids.length > 1) {
@@ -786,6 +859,7 @@
             if (!kid.completed) kid.completed = {};
             if (kid.completed[key]) delete kid.completed[key];
             else kid.completed[key] = true;
+            recomputePerfectDays(kid);
             save();
             renderPreview();
           });
@@ -841,11 +915,42 @@
     return chart;
   }
 
+  function buildCreatureCard(kid) {
+    var c = creatureFor(kid);
+    var card = el("div", "creature-card");
+    card.dataset.stage = c.stage.name.toLowerCase().replace(/\s+/g, "-");
+
+    card.append(el("div", "creature-art", c.stage.emoji));
+    var info = el("div", "creature-info");
+
+    var title = el("div", "creature-title", (kid.creatureName || "Chore Pal") + " · " + c.stage.name);
+    title.append(el("span", "creature-level", "Lv " + c.level));
+    info.append(title);
+    info.append(el("div", "creature-hint", c.stage.hint));
+
+    var xpTrack = el("div", "xp-track");
+    var xpFill = el("div", "xp-fill");
+    xpFill.style.width = c.xpInto + "%";
+    xpTrack.append(xpFill);
+    info.append(xpTrack);
+
+    var meta = "🔥 " + c.streak + " day streak · " + c.xp + " XP";
+    if (c.next) meta += " · evolves in " + c.toNext + " perfect day" + (c.toNext === 1 ? "" : "s");
+    info.append(el("div", "creature-meta", meta));
+
+    card.append(info);
+    return card;
+  }
+
   function renderPreview() {
     var root = document.getElementById("preview");
     root.replaceChildren();
     var kids = (IS_PRO && state.printAll) ? state.kids : [activeKid()];
-    kids.forEach(function (kid) { root.append(buildChart(kid)); });
+    kids.forEach(function (kid) {
+      recomputePerfectDays(kid);
+      root.append(buildCreatureCard(kid));
+      root.append(buildChart(kid));
+    });
   }
 
   function renderAll() {
