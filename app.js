@@ -95,7 +95,7 @@
       weekStart: typeof raw.weekStart === "string" ? raw.weekStart : base.weekStart,
       theme: ["sunshine", "ocean", "forest", "candy"].indexOf(raw.theme) >= 0 ? raw.theme : "sunshine",
       usePoints: raw.usePoints !== false,
-      allowanceRate: Math.max(0, Number(raw.allowanceRate) || 0),
+      allowanceRate: raw.allowanceRate === undefined ? 0.25 : Math.max(0, Number(raw.allowanceRate) || 0),
       reward: {
         name: raw.reward && typeof raw.reward.name === "string" ? raw.reward.name : "",
         points: Number(raw.reward && raw.reward.points) || 10
