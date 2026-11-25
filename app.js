@@ -4,7 +4,7 @@
   "use strict";
 
   // ---- Replace this with your own Gumroad URL before publishing ----
-  var GUMROAD_URL = "https://gumroad.com/l/chorechart-pro";
+  var GUMROAD_URL = "https://hubacher.gumroad.com/l/udnmne";
 
   var IS_PRO = window.CHORCHART_PRO === true;
   var FREE_CHORE_LIMIT = 8;
