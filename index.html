@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChoreChart — Free Printable Chore Chart Generator</title>
+<meta name="description" content="Create a free printable weekly chore chart for your kids in seconds. No sign-up, no watermarks, just print.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📋</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="./"><span class="brand-mark">📋</span><span>ChoreChart</span></a>
+    <span class="tagline">Free printable chore charts in seconds</span>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="intro">
+    <h1>Make a chore chart. Print it. Done.</h1>
+    <p>No sign-up, no watermarks. Build a weekly chart, then hit print.</p>
+  </section>
+
+  <div class="layout">
+    <section class="builder" aria-label="Chart builder">
+      <div id="controls"></div>
+    </section>
+
+    <section class="preview-wrap" aria-label="Chart preview">
+      <div class="preview-toolbar">
+        <span class="preview-label">Live preview</span>
+        <button type="button" id="printBtn" class="btn btn-primary">🖨️ Print chart</button>
+      </div>
+      <div id="preview" class="preview"></div>
+    </section>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>ChoreChart — free to use, no account required.</span>
+    <span class="footer-note">Made for busy parents &amp; teachers.</span>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
