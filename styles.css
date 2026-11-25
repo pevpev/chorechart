@@ -501,19 +501,66 @@ body.coupons-only #couponSheet {
 .faq summary { cursor: pointer; font-weight: 650; font-size: 14px; }
 .faq details p { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
 
+/* ---------- Points, routines, shop and badges ---------- */
+.chore-streak { font-size: 11px; color: #b45309; font-weight: 700; white-space: nowrap; }
+.coupon-price-name { flex: 1; font-size: 12px; }
+.coupon-price-name + input { flex: 0 0 80px; }
+
+.family-panels { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin: 16px 0; }
+@media (max-width: 800px) { .family-panels { grid-template-columns: 1fr; } }
+
+.shop-head, .badge-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.shop-title, .badge-head { font-size: 15px; font-weight: 800; }
+.shop-balance { font-size: 13px; font-weight: 750; color: #b45309; }
+.shop-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.shop-item {
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fff;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.shop-name { font-size: 13px; font-weight: 700; }
+.shop-cost { font-size: 11px; color: var(--muted); }
+
+.badge-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.badge {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 4px; border: 1px solid var(--line); border-radius: 10px;
+  background: #f9fafb; text-align: center; opacity: 0.55;
+}
+.badge.on { opacity: 1; background: var(--brand-soft); border-color: var(--brand); }
+.badge-emoji { font-size: 26px; }
+.badge-name { font-size: 10px; font-weight: 700; }
+
+.routine-block { margin-top: 10px; }
+.routine-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 6px; }
+#routineSheet { display: none; }
+body.routines-only .preview-wrap, body.routines-only .family-panels { display: none; }
+body.routines-only #routineSheet {
+  display: block; background: #fff; border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px;
+}
+.routine-sheet { margin-top: 20px; break-inside: avoid; page-break-inside: avoid; }
+.routine-sheet h3 { margin: 0 0 8px; font-size: 18px; }
+.routine-table { font-size: 14px; }
+.routine-box { font-size: 18px; text-align: center; color: #444; }
+
 /* ---------- Print ---------- */
 @media print {
   @page { size: letter portrait; margin: 0.5in; }
 
   body { background: #fff; font-size: 12px; }
   .site-header, .site-footer, .intro, .builder, .preview-toolbar, .banner, .pro-badge,
-  .how-it-works, .gallery, .faq, .creature-card { display: none !important; }
+  .how-it-works, .gallery, .faq, .creature-card, .family-panels { display: none !important; }
   .wrap { max-width: none; padding: 0; }
   .layout { display: block; }
   .preview-wrap { border: 0; box-shadow: none; padding: 0; background: #fff; }
   .preview { gap: 0; }
   body.coupons-only #couponSheet { display: block !important; border: 0; box-shadow: none; padding: 0; }
-  body.coupons-only .preview-wrap { display: none !important; }
+  body.coupons-only .preview-wrap, body.coupons-only .family-panels, body.coupons-only #routineSheet { display: none !important; }
+  body.routines-only .preview-wrap, body.routines-only .family-panels, body.routines-only #couponSheet { display: none !important; }
+  body.routines-only #routineSheet { display: block !important; border: 0; box-shadow: none; padding: 0; }
   .coupon { break-inside: avoid; page-break-inside: avoid; }
   .chart {
     border: 2px solid #000;

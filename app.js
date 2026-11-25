@@ -49,6 +49,28 @@
     "Choose a game", "No chores tomorrow", "Sleepover", "Ice cream"
   ];
 
+  var ES = {
+    "Chore": "Tarea", "Points": "Puntos", "Week of": "Semana del", "Chore Chart": "Tabla de tareas",
+    "Signed:": "Firmado:", "If all done:": "Si todo está hecho:",
+    "Earned:": "Ganado:", "Working toward:": "Meta:", "done": "hecho",
+    "Mon": "Lun", "Tue": "Mar", "Wed": "Mié", "Thu": "Jue", "Fri": "Vie", "Sat": "Sáb", "Sun": "Dom"
+  };
+
+  var DEFAULT_ROUTINES = {
+    morning: ["Wake up", "Make the bed", "Brush teeth", "Get dressed", "Eat breakfast", "Pack bag"],
+    bedtime: ["Brush teeth", "Put toys away", "Bath time", "Story", "Lights out"]
+  };
+
+  var BADGES = [
+    { id: "first", emoji: "🌟", name: "First Step", hint: "Complete your first chore" },
+    { id: "ten", emoji: "🔟", name: "Ten Done", hint: "Complete 10 chores" },
+    { id: "streak3", emoji: "🔥", name: "On Fire", hint: "3-day perfect streak" },
+    { id: "streak7", emoji: "💪", name: "Unstoppable", hint: "7-day perfect streak" },
+    { id: "points100", emoji: "💰", name: "100 Points", hint: "Earn 100 points" },
+    { id: "chick", emoji: "🐤", name: "Chick", hint: "Hatch your creature" },
+    { id: "dragon", emoji: "🐲", name: "Legend", hint: "Reach the dragon stage" }
+  ];
+
   var STAGES = [
     { min: 0, name: "Egg", emoji: "🥚", hint: "Finish every chore on one day to hatch." },
     { min: 1, name: "Hatchling", emoji: "🐣", hint: "Nice! 3 perfect days in a row to evolve." },
@@ -98,6 +120,60 @@
 
   function money(n) {
     return "$" + (Math.round(Number(n) * 100) / 100).toFixed(2);
+  }
+
+  function t(text) {
+    return state.language === "es" && ES[text] ? ES[text] : text;
+  }
+
+  function earnedPoints(kid) {
+    var total = 0;
+    kid.chores.forEach(function (c) {
+      for (var i = 0; i < 7; i++) {
+        if (kid.completed && kid.completed[c.id + "|" + dateForDay(i)]) total += c.points;
+      }
+    });
+    return total;
+  }
+
+  function pointsBalance(kid) {
+    return Math.max(0, earnedPoints(kid) - (kid.spentPoints || 0));
+  }
+
+  function dayBefore(date) {
+    var parts = date.split("-").map(Number);
+    var d = new Date(parts[0], parts[1] - 1, parts[2] - 1);
+    return toISO(d);
+  }
+
+  function choreStreak(kid, chore) {
+    var now = new Date();
+    var cursor = toISO(now);
+    if (!kid.completed || !kid.completed[chore.id + "|" + cursor]) cursor = dayBefore(cursor);
+    var count = 0;
+    while (kid.completed && kid.completed[chore.id + "|" + cursor]) {
+      count++;
+      cursor = dayBefore(cursor);
+    }
+    return count;
+  }
+
+  function badgesFor(kid) {
+    var streak = streakFor(kid);
+    var earned = earnedPoints(kid);
+    var stageIndex = 0;
+    STAGES.forEach(function (s, i) { if (streak >= s.min) stageIndex = i; });
+    var doneCount = Object.keys(kid.completed || {}).length;
+    var unlocked = {
+      first: doneCount >= 1,
+      ten: doneCount >= 10,
+      streak3: streak >= 3,
+      streak7: streak >= 7,
+      points100: earned >= 100,
+      chick: stageIndex >= 2,
+      dragon: stageIndex >= STAGES.length - 1
+    };
+    return BADGES.map(function (b) { return Object.assign({}, b, { on: !!unlocked[b.id] }); });
   }
 
   function rateFor(kid) {
@@ -170,12 +246,14 @@
 
   function creatureFor(kid) {
     var streak = streakFor(kid);
-    var completedCount = Object.keys(kid.completed || {}).length;
-    var xp = completedCount * 10;
+    var earned = earnedPoints(kid);
+    var boost = Math.floor(earned / 100);
+    var power = streak + boost;
+    var xp = earned * 2;
     var level = Math.floor(xp / 50) + 1;
     var xpInto = xp % 50;
     var stageIndex = 0;
-    STAGES.forEach(function (s, i) { if (streak >= s.min) stageIndex = i; });
+    STAGES.forEach(function (s, i) { if (power >= s.min) stageIndex = i; });
     var stage = STAGES[stageIndex];
     var next = STAGES[stageIndex + 1];
     return {
@@ -184,7 +262,10 @@
       xp: xp,
       xpInto: xpInto,
       streak: streak,
-      toNext: next ? next.min - streak : 0,
+      earned: earned,
+      boost: boost,
+      power: power,
+      toNext: next ? next.min - power : 0,
       next: next
     };
   }
@@ -205,11 +286,18 @@
       usePoints: true,
       allowanceRate: 0.25,
       presetGroup: "Kids",
-      coupons: DEFAULT_COUPONS.map(function (text) { return { id: uid(), text: text, on: true }; }),
+      language: "en",
+      printSize: "letter",
+      orientation: "portrait",
+      routines: { morning: DEFAULT_ROUTINES.morning.slice(), bedtime: DEFAULT_ROUTINES.bedtime.slice() },
+      template: null,
+      coupons: DEFAULT_COUPONS.map(function (text, i) {
+        return { id: uid(), text: text, on: true, cost: [10, 15, 20, 10, 10, 30, 40, 15][i] || 10 };
+      }),
       reward: { name: "", points: 10 },
       activeKid: 0,
       printAll: false,
-      kids: [{ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, perfectDays: {}, creatureName: "Chore Pal", chores: defaultChores() }]
+      kids: [{ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, perfectDays: {}, spentPoints: 0, claimed: {}, creatureName: "Chore Pal", chores: defaultChores() }]
     };
   }
 
@@ -223,9 +311,22 @@
       usePoints: raw.usePoints !== false,
       allowanceRate: raw.allowanceRate === undefined ? 0.25 : Math.max(0, Number(raw.allowanceRate) || 0),
       presetGroup: PRESETS[raw.presetGroup] ? raw.presetGroup : "Kids",
+      language: raw.language === "es" ? "es" : "en",
+      printSize: raw.printSize === "a4" ? "a4" : "letter",
+      orientation: raw.orientation === "landscape" ? "landscape" : "portrait",
+      routines: {
+        morning: raw.routines && Array.isArray(raw.routines.morning) ? raw.routines.morning.slice(0, 20) : base.routines.morning,
+        bedtime: raw.routines && Array.isArray(raw.routines.bedtime) ? raw.routines.bedtime.slice(0, 20) : base.routines.bedtime
+      },
+      template: raw.template && Array.isArray(raw.template.chores) ? raw.template : null,
       coupons: Array.isArray(raw.coupons)
         ? raw.coupons.slice(0, 12).map(function (c) {
-            return { id: uid(), text: typeof c.text === "string" ? c.text : "Reward", on: c.on !== false };
+            return {
+              id: uid(),
+              text: typeof c.text === "string" ? c.text : "Reward",
+              on: c.on !== false,
+              cost: Math.max(1, Number(c.cost) || 10)
+            };
           })
         : base.coupons,
       reward: {
@@ -248,7 +349,7 @@
         return {
           id: uid(),
           name: typeof c.name === "string" ? c.name : "Chore",
-          points: Math.max(1, Math.min(99, Number(c.points) || 1)),
+          points: Math.max(1, Math.min(999, Number(c.points) || 1)),
           icon: typeof c.icon === "string" ? c.icon.slice(0, 8) : "",
           days: days.map(Boolean)
         };
@@ -276,6 +377,8 @@
         rate: rate,
         completed: completed,
         perfectDays: perfectDays,
+        spentPoints: Math.max(0, Number(k && k.spentPoints) || 0),
+        claimed: k && k.claimed && typeof k.claimed === "object" ? k.claimed : {},
         creatureName: k && typeof k.creatureName === "string" ? k.creatureName.slice(0, 24) : "Chore Pal",
         chores: chores
       });
@@ -302,7 +405,7 @@
   }
 
   function activeKid() {
-    if (!state.kids.length) state.kids.push({ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, perfectDays: {}, creatureName: "Chore Pal", chores: [] });
+    if (!state.kids.length) state.kids.push({ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, perfectDays: {}, spentPoints: 0, claimed: {}, creatureName: "Chore Pal", chores: [] });
     if (state.activeKid >= state.kids.length) state.activeKid = state.kids.length - 1;
     return state.kids[state.activeKid];
   }
@@ -324,6 +427,22 @@
     label.append(input);
     wrap.append(label);
     input.addEventListener("input", function () { onInput(input.value); });
+    return wrap;
+  }
+
+  function selectField(labelText, options, value, onChange) {
+    var wrap = el("div", "field");
+    var label = el("label", null, labelText);
+    var select = el("select");
+    options.forEach(function (pair) {
+      var opt = el("option", null, pair[1]);
+      opt.value = pair[0];
+      select.append(opt);
+    });
+    select.value = value;
+    select.addEventListener("change", function () { onChange(select.value); });
+    label.append(select);
+    wrap.append(label);
     return wrap;
   }
 
@@ -377,6 +496,13 @@
       });
       couponBtn.style.marginTop = "8px";
       actions.append(couponBtn);
+      var routineBtn = button("🌅 Print routines", "btn-block", function () {
+        document.body.classList.add("routines-only");
+        window.print();
+        setTimeout(function () { document.body.classList.remove("routines-only"); }, 1200);
+      });
+      routineBtn.style.marginTop = "8px";
+      actions.append(routineBtn);
     }
     var reset = button("Reset to example chart", "btn-danger btn-block", function () {
       if (window.confirm("Replace everything with the example chart?")) {
@@ -409,7 +535,7 @@
       });
       var add = button("+ Add child", "btn-small", function () {
         if (state.kids.length >= 6) { window.alert("Pro supports up to 6 children per chart set."); return; }
-        state.kids.push({ id: uid(), name: "Child " + (state.kids.length + 1), stars: 0, rate: null, completed: {}, perfectDays: {}, creatureName: "Chore Pal", chores: [] });
+        state.kids.push({ id: uid(), name: "Child " + (state.kids.length + 1), stars: 0, rate: null, completed: {}, perfectDays: {}, spentPoints: 0, claimed: {}, creatureName: "Chore Pal", chores: [] });
         state.activeKid = state.kids.length - 1;
         save();
         renderAll();
@@ -475,7 +601,7 @@
     var ptsInput = el("input");
     ptsInput.type = "number";
     ptsInput.min = "1";
-    ptsInput.max = "99";
+    ptsInput.max = "999";
     ptsInput.value = "2";
     ptsInput.setAttribute("aria-label", "Points");
     ptsWrap.append(ptsInput);
@@ -527,7 +653,7 @@
       kid.chores.push({
         id: uid(),
         name: name,
-        points: Math.max(1, Math.min(99, Number(ptsInput.value) || 1)),
+        points: Math.max(1, Math.min(999, Number(ptsInput.value) || 1)),
         icon: chosenIcon,
         days: boxes.map(function (b) { return b.checked; })
       });
@@ -544,6 +670,10 @@
       if (IS_PRO && c.icon) item.append(el("span", "chore-icon", c.icon));
       item.append(el("span", "chore-name", c.name));
       if (state.usePoints) item.append(el("span", "chore-pts", c.points + " pts"));
+      if (IS_PRO) {
+        var cs = choreStreak(kid, c);
+        if (cs > 0) item.append(el("span", "chore-streak", "🔥" + cs));
+      }
 
       var mini = el("div", "day-mini");
       c.days.forEach(function (on, i) {
@@ -600,6 +730,23 @@
       }));
     });
     ideas.append(chips);
+    var templateRow = el("div", "row");
+    templateRow.style.marginTop = "8px";
+    templateRow.append(button("💾 Save as template", "btn-small", function () {
+      state.template = { chores: JSON.parse(JSON.stringify(kid.chores)) };
+      save();
+      renderAll();
+    }));
+    templateRow.append(button("📋 Apply template", "btn-small", function () {
+      if (!state.template) { window.alert("Save a template first."); return; }
+      kid.chores = state.template.chores.map(function (c) {
+        return { id: uid(), name: c.name, points: c.points, icon: c.icon, days: c.days.slice(0, 7) };
+      });
+      if (!IS_PRO) kid.chores = kid.chores.slice(0, FREE_CHORE_LIMIT);
+      save();
+      renderAll();
+    }));
+    ideas.append(templateRow);
     wrap.append(ideas);
 
     if (!IS_PRO) {
@@ -752,6 +899,79 @@
     couponWrap.append(couponRow);
     wrap.append(couponWrap);
 
+    wrap.append(selectField("Language / Idioma", [["en", "English"], ["es", "Español"]], state.language, function (v) {
+      state.language = v;
+      save();
+      renderAll();
+    }));
+    wrap.append(selectField("Paper size", [["letter", "US Letter"], ["a4", "A4"]], state.printSize, function (v) {
+      state.printSize = v;
+      save();
+      updatePrintStyle();
+    }));
+    wrap.append(selectField("Orientation", [["portrait", "Portrait"], ["landscape", "Landscape"]], state.orientation, function (v) {
+      state.orientation = v;
+      save();
+      updatePrintStyle();
+    }));
+
+    var priceWrap = el("div", "field");
+    priceWrap.append(el("label", null, "Reward shop prices (points)"));
+    state.coupons.forEach(function (c) {
+      var line = el("div", "row");
+      line.append(el("span", "coupon-price-name", c.text));
+      var cost = el("input");
+      cost.type = "number";
+      cost.min = "1";
+      cost.value = String(c.cost);
+      cost.addEventListener("input", function () { c.cost = Math.max(1, Number(cost.value) || 1); save(); renderShop(); });
+      line.append(cost);
+      priceWrap.append(line);
+    });
+    wrap.append(priceWrap);
+
+    var routineWrap = el("div", "field");
+    routineWrap.append(el("label", null, "Morning & bedtime routines"));
+    ["morning", "bedtime"].forEach(function (key) {
+      var sub = el("div", "routine-block");
+      sub.append(el("div", "preset-title", key === "morning" ? "☀️ Morning" : "🌙 Bedtime"));
+      var list = el("div", "routine-list");
+      state.routines[key].forEach(function (item, idx) {
+        var line = el("div", "row");
+        var inp = el("input");
+        inp.type = "text";
+        inp.value = item;
+        inp.addEventListener("input", function () {
+          state.routines[key][idx] = inp.value;
+          save();
+          renderRoutines();
+        });
+        line.append(inp);
+        line.append(button("✕", "btn-small btn-danger", function () {
+          state.routines[key].splice(idx, 1);
+          save();
+          renderAll();
+        }));
+        list.append(line);
+      });
+      sub.append(list);
+      var addRow = el("div", "row");
+      var newInp = el("input");
+      newInp.type = "text";
+      newInp.placeholder = "Add a step...";
+      addRow.append(newInp);
+      addRow.append(button("+", "btn-small", function () {
+        var v = newInp.value.trim();
+        if (!v || state.routines[key].length >= 20) return;
+        state.routines[key].push(v);
+        save();
+        renderAll();
+      }));
+      sub.append(addRow);
+      routineWrap.append(sub);
+    });
+    wrap.append(routineWrap);
+
     var dataRow = el("div", "row");
     dataRow.append(button("⬇ Export data", "btn-small", function () {
       var blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
@@ -787,6 +1007,92 @@
     wrap.append(dataRow);
 
     return wrap;
+  }
+
+  // ---------- Extra printable sheets and panels (Pro) ----------
+  function updatePrintStyle() {
+    var style = document.getElementById("printStyle");
+    if (style) {
+      style.textContent = "@media print { @page { size: " + state.printSize + " " + state.orientation + "; margin: 0.5in; } }";
+    }
+  }
+
+  function renderRoutines() {
+    var root = document.getElementById("routineSheet");
+    if (!root || !IS_PRO) return;
+    root.replaceChildren();
+    var head = el("div", "coupon-head");
+    head.append(el("h2", null, "Daily Routines"));
+    head.append(el("div", "coupon-sub", "Tick each step as it happens."));
+    root.append(head);
+
+    [["morning", "☀️ Morning"], ["bedtime", "🌙 Bedtime"]].forEach(function (pair) {
+      var block = el("div", "routine-sheet");
+      block.append(el("h3", null, pair[1]));
+      var table = el("table", "chart-table routine-table");
+      state.routines[pair[0]].forEach(function (item) {
+        var row = el("tr");
+        row.append(el("td", "chore-cell", item));
+        row.append(el("td", "routine-box", "☐"));
+        row.append(el("td", "routine-box", "☐"));
+        row.append(el("td", "routine-box", "☐"));
+        row.append(el("td", "routine-box", "☐"));
+        row.append(el("td", "routine-box", "☐"));
+        table.append(row);
+      });
+      block.append(table);
+      root.append(block);
+    });
+  }
+
+  function renderShop() {
+    var root = document.getElementById("rewardShop");
+    if (!root || !IS_PRO) return;
+    root.replaceChildren();
+    var kid = activeKid();
+    var head = el("div", "shop-head");
+    head.append(el("span", "shop-title", "🎁 Reward Shop"));
+    head.append(el("span", "shop-balance", "💎 " + pointsBalance(kid) + " points"));
+    root.append(head);
+
+    var grid = el("div", "shop-grid");
+    state.coupons.filter(function (c) { return c.on; }).forEach(function (c) {
+      var item = el("div", "shop-item");
+      item.append(el("div", "shop-name", c.text));
+      item.append(el("div", "shop-cost", c.cost + " pts"));
+      var owned = (kid.claimed && kid.claimed[c.id]) > 0;
+      var buy = button(owned ? "✅ Owned" : "Buy", "btn-small", function () {
+        if (pointsBalance(kid) < c.cost) {
+          window.alert("You need " + (c.cost - pointsBalance(kid)) + " more points for " + c.text + ".");
+          return;
+        }
+        if (!kid.claimed) kid.claimed = {};
+        kid.spentPoints = (kid.spentPoints || 0) + c.cost;
+        kid.claimed[c.id] = (kid.claimed[c.id] || 0) + 1;
+        save();
+        renderAll();
+      });
+      if (owned) buy.disabled = true;
+      item.append(buy);
+      grid.append(item);
+    });
+    root.append(grid);
+  }
+
+  function renderBadges() {
+    var root = document.getElementById("badgeShelf");
+    if (!root || !IS_PRO) return;
+    root.replaceChildren();
+    root.append(el("div", "badge-head", "🏆 Badge shelf"));
+    var grid = el("div", "badge-grid");
+    badgesFor(activeKid()).forEach(function (b) {
+      var item = el("div", "badge" + (b.on ? " on" : ""));
+      item.title = b.hint;
+      item.append(el("span", "badge-emoji", b.on ? b.emoji : "🔒"));
+      item.append(el("span", "badge-name", b.name));
+      grid.append(item);
+    });
+    root.append(grid);
   }
 
   // ---------- Printable reward coupon sheet (Pro) ----------
@@ -827,16 +1133,16 @@
     chart.dataset.theme = state.theme;
 
     var head = el("div", "chart-head");
-    head.append(el("h2", "chart-title", possessive(kid.name) + " Chore Chart"));
-    head.append(el("div", "chart-week", "Week of " + prettyDate(state.weekStart)));
+    head.append(el("h2", "chart-title", possessive(kid.name) + " " + t("Chore Chart")));
+    head.append(el("div", "chart-week", t("Week of") + " " + prettyDate(state.weekStart)));
     chart.append(head);
 
     var table = el("table", "chart-table");
     var thead = el("thead");
     var headRow = el("tr");
-    headRow.append(el("th", "col-chore", "Chore"));
-    if (state.usePoints) headRow.append(el("th", "col-points", "Points"));
-    DAYS.forEach(function (d) { headRow.append(el("th", "col-day", d)); });
+    headRow.append(el("th", "col-chore", t("Chore")));
+    if (state.usePoints) headRow.append(el("th", "col-points", t("Points")));
+    DAYS.forEach(function (d) { headRow.append(el("th", "col-day", t(d))); });
     thead.append(headRow);
     table.append(thead);
 
@@ -861,7 +1167,7 @@
             else kid.completed[key] = true;
             recomputePerfectDays(kid);
             save();
-            renderPreview();
+            renderAll();
           });
           cell.append(box);
         }
@@ -886,18 +1192,18 @@
       var rate = rateFor(kid);
       var possible = possiblePoints(kid);
       var allowance = el("div", "chart-allowance");
-      allowance.append(el("span", null, "💵 If all done: " + possible + " pts = " + money(possible * rate)));
+      allowance.append(el("span", null, "💵 " + t("If all done") + ": " + possible + " pts = " + money(possible * rate)));
       if (IS_PRO) {
         allowance.append(el("span", "allowance-detail",
           money(rate) + "/pt · 4-week estimate " + money(possible * rate * 4)));
       }
-      allowance.append(el("span", "allowance-earned", "Earned: ______ pts = $ ______"));
+      allowance.append(el("span", "allowance-earned", t("Earned") + ": ______ pts = $ ______"));
       chart.append(allowance);
     }
 
     if (state.usePoints && state.reward.name) {
       var reward = el("div", "chart-reward");
-      reward.append(el("span", null, "⭐ Working toward: " + state.reward.name + " (" + state.reward.points + " pts)"));
+      reward.append(el("span", null, "⭐ " + t("Working toward") + ": " + state.reward.name + " (" + state.reward.points + " pts)"));
 
       if (IS_PRO) {
         var track = el("div", "progress-track");
@@ -911,7 +1217,7 @@
       chart.append(reward);
     }
 
-    chart.append(el("div", "chart-sign", "Signed: ________________________________"));
+    chart.append(el("div", "chart-sign", t("Signed:") + " ________________________________"));
     return chart;
   }
 
@@ -934,7 +1240,8 @@
     xpTrack.append(xpFill);
     info.append(xpTrack);
 
-    var meta = "🔥 " + c.streak + " day streak · " + c.xp + " XP";
+    var meta = "🔥 " + c.streak + " day streak · 💎 " + c.earned + " points · " + c.xp + " XP";
+    if (c.boost) meta += " · +" + c.boost + " evolution days from points";
     if (c.next) meta += " · evolves in " + c.toNext + " perfect day" + (c.toNext === 1 ? "" : "s");
     info.append(el("div", "creature-meta", meta));
 
@@ -954,9 +1261,13 @@
   }
 
   function renderAll() {
+    updatePrintStyle();
     renderControls();
     renderPreview();
     renderCoupons();
+    renderRoutines();
+    renderShop();
+    renderBadges();
   }
 
   // ---------- Wire up ----------
