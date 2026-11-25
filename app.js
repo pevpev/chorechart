@@ -103,6 +103,33 @@
     }, 0);
   }
 
+  function dateForDay(index) {
+    var parts = String(state.weekStart || "").split("-").map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) {
+      var fallback = new Date();
+      parts = [fallback.getFullYear(), fallback.getMonth() + 1, fallback.getDate()];
+    }
+    var d = new Date(parts[0], parts[1] - 1, parts[2] + index);
+    return toISO(d);
+  }
+
+  function doneKey(choreId, dayIndex) {
+    return choreId + "|" + dateForDay(dayIndex);
+  }
+
+  function weekProgress(kid) {
+    var total = 0;
+    var done = 0;
+    kid.chores.forEach(function (c) {
+      for (var i = 0; i < 7; i++) {
+        if (!c.days[i]) continue;
+        total++;
+        if (kid.completed && kid.completed[doneKey(c.id, i)]) done++;
+      }
+    });
+    return { total: total, done: done };
+  }
+
   function defaultChores() {
     return [
       { id: uid(), name: "Make the bed", points: 2, icon: "🛏️", days: [true, true, true, true, true, false, false] },
@@ -123,7 +150,7 @@
       reward: { name: "", points: 10 },
       activeKid: 0,
       printAll: false,
-      kids: [{ id: uid(), name: "My Champs", stars: 0, rate: null, chores: defaultChores() }]
+      kids: [{ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, chores: defaultChores() }]
     };
   }
 
@@ -171,11 +198,18 @@
       var rate = k && k.rate !== null && k.rate !== undefined && k.rate !== ""
         ? Math.max(0, Number(k.rate) || 0)
         : null;
+      var completed = {};
+      if (k && k.completed && typeof k.completed === "object") {
+        Object.keys(k.completed).forEach(function (key) {
+          if (k.completed[key]) completed[key] = true;
+        });
+      }
       out.kids.push({
         id: uid(),
         name: k && typeof k.name === "string" ? k.name : "My Champs",
         stars: Math.max(0, Number(k && k.stars) || 0),
         rate: rate,
+        completed: completed,
         chores: chores
       });
     });
@@ -201,7 +235,7 @@
   }
 
   function activeKid() {
-    if (!state.kids.length) state.kids.push({ id: uid(), name: "My Champs", stars: 0, rate: null, chores: [] });
+    if (!state.kids.length) state.kids.push({ id: uid(), name: "My Champs", stars: 0, rate: null, completed: {}, chores: [] });
     if (state.activeKid >= state.kids.length) state.activeKid = state.kids.length - 1;
     return state.kids[state.activeKid];
   }
@@ -260,6 +294,14 @@
 
     var actions = el("div", "card");
     actions.append(button("🖨️ Print chart", "btn-primary btn-block", function () { window.print(); }));
+    var clear = button("↺ Clear this week's ticks", "btn-block", function () {
+      if (!window.confirm("Clear all the done marks for this week?")) return;
+      activeKid().completed = {};
+      save();
+      renderAll();
+    });
+    clear.style.marginTop = "8px";
+    actions.append(clear);
     if (IS_PRO) {
       var couponBtn = button("🎟️ Print reward coupons", "btn-block", function () {
         document.body.classList.add("coupons-only");
@@ -300,7 +342,7 @@
       });
       var add = button("+ Add child", "btn-small", function () {
         if (state.kids.length >= 6) { window.alert("Pro supports up to 6 children per chart set."); return; }
-        state.kids.push({ id: uid(), name: "Child " + (state.kids.length + 1), stars: 0, rate: null, chores: [] });
+        state.kids.push({ id: uid(), name: "Child " + (state.kids.length + 1), stars: 0, rate: null, completed: {}, chores: [] });
         state.activeKid = state.kids.length - 1;
         save();
         renderAll();
@@ -732,13 +774,39 @@
       if (state.usePoints) row.append(el("td", "pts-cell", String(c.points)));
       for (var i = 0; i < 7; i++) {
         var cell = el("td");
-        if (c.days[i]) cell.append(el("span", "tick"));
+        if (c.days[i]) {
+          let key = doneKey(c.id, i);
+          let isDone = !!(kid.completed && kid.completed[key]);
+          let box = el("button", "check-box" + (isDone ? " done" : ""), isDone ? "✓" : "");
+          box.type = "button";
+          box.title = DAYS[i] + (isDone ? " — done, click to undo" : " — click to mark done");
+          box.setAttribute("aria-label", c.name + " " + DAYS[i] + (isDone ? " done" : " not done"));
+          box.setAttribute("aria-pressed", isDone ? "true" : "false");
+          box.addEventListener("click", function () {
+            if (!kid.completed) kid.completed = {};
+            if (kid.completed[key]) delete kid.completed[key];
+            else kid.completed[key] = true;
+            save();
+            renderPreview();
+          });
+          cell.append(box);
+        }
         row.append(cell);
       }
       tbody.append(row);
     });
     table.append(tbody);
     chart.append(table);
+
+    var progress = weekProgress(kid);
+    var bar = el("div", "chart-progress");
+    bar.append(el("span", null, progress.done + " / " + progress.total + " done"));
+    var track = el("div", "progress-track");
+    var fill = el("div", "progress-fill");
+    fill.style.width = (progress.total ? Math.round((progress.done / progress.total) * 100) : 0) + "%";
+    track.append(fill);
+    bar.append(track);
+    chart.append(bar);
 
     if (state.usePoints && rateFor(kid) > 0) {
       var rate = rateFor(kid);

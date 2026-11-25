@@ -342,6 +342,28 @@ input:focus, select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rg
   vertical-align: middle;
 }
 
+.check-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.check-box:hover { background: var(--chart-soft); }
+.check-box.done { background: var(--chart-accent); border-color: var(--chart-accent); color: #fff; font-weight: 800; }
+
+.chart-progress { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 12px; font-weight: 700; }
+.chart-progress .progress-track { max-width: 220px; }
+
 .chart-reward {
   display: flex;
   align-items: center;
@@ -483,5 +505,6 @@ body.coupons-only #couponSheet {
   .chart-head { border-bottom-color: #000; }
   .chart-table th, .chart-table td { border-color: #999; }
   .chart-table thead th, .chart-reward { background: #eee !important; }
-  .tick { border-color: #000; }
+  .tick, .check-box { border-color: #000; }
+  .check-box.done { background: #000 !important; border-color: #000 !important; color: #fff !important; }
 }

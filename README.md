@@ -2,7 +2,7 @@
 
 A free printable chore-chart generator (the traffic magnet) plus a paid **Pro** download (the income). Everything is plain HTML/CSS/JS — no build tools, no server, no monthly costs.
 
-Current features: weekly printable charts, age-based chore idea library, points or a simple no-points mode, an allowance calculator ($ per point), reward/star tracking, emoji chore icons (Pro), printable reward coupons and star chart (Pro), multiple children (Pro), colour themes (Pro), and offline use.
+Current features: weekly printable charts, age-based chore idea library, clickable done boxes with a progress bar, points or a simple no-points mode, an allowance calculator ($ per point), reward/star tracking, emoji chore icons (Pro), printable reward coupons and star chart (Pro), multiple children (Pro), colour themes (Pro), and offline use.
 
 The free page also includes a how-it-works section, example chart gallery, and FAQ to help convert visitors.
 
